@@ -60,11 +60,11 @@ class InstanceBrowserDock(pya.QDockWidget):
     def __init__(self):
         pya.QDockWidget.__init__(self)
         self.setWindowTitle("Instance Browser")
-        self.widget = InstanceBrowserWidget()
-        self.setWidget(self.widget)
+        self._browser_widget = InstanceBrowserWidget()
+        self.setWidget(self._browser_widget)
 
     def refresh(self):
-        self.widget.refresh()
+        self._browser_widget.refresh()
 
 
 class InstanceBrowserWidget(pya.QWidget):
