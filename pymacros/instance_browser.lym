@@ -21,6 +21,8 @@ import sys
 import pya
 
 QT_USER_ROLE = 256
+EXTENDED_SELECTION = 3
+
 
 def _candidate_python_dirs():
     candidates = []
@@ -94,12 +96,15 @@ def _object_path_for_record(layout, top_cell, cv_index, record):
     return obj_path
 
 
-def _zoom_to_record(view, cv, record):
-    box = record.bbox
-    left = float(box[0]) * cv.layout().dbu
-    bottom = float(box[1]) * cv.layout().dbu
-    right = float(box[2]) * cv.layout().dbu
-    top = float(box[3]) * cv.layout().dbu
+def _zoom_to_records(view, cv, records):
+    records = list(records)
+    if not records:
+        return
+    dbu = cv.layout().dbu
+    left = min(float(record.bbox[0]) * dbu for record in records)
+    bottom = min(float(record.bbox[1]) * dbu for record in records)
+    right = max(float(record.bbox[2]) * dbu for record in records)
+    top = max(float(record.bbox[3]) * dbu for record in records)
     width = max(0.0, right - left)
     height = max(0.0, top - bottom)
     pad = max(width, height) * 0.15
@@ -129,6 +134,10 @@ class InstanceBrowserWidget(pya.QWidget):
         self.zoom_button = pya.QPushButton("Zoom")
         self.select_zoom_button = pya.QPushButton("Select + Zoom")
         self.tree = pya.QTreeWidget()
+        try:
+            self.tree.setSelectionMode(pya.QAbstractItemView.ExtendedSelection)
+        except Exception:
+            self.tree.setSelectionMode(EXTENDED_SELECTION)
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(["Instance", "Parent", "Path", "Trans", "BBox"])
         self._records_by_path = {}
@@ -200,37 +209,64 @@ class InstanceBrowserWidget(pya.QWidget):
             return None
         return self._records_by_path.get(str(path))
 
-    def _selected_record(self):
-        return self._record_from_item(self._current_item())
+    def _selected_items(self):
+        items = self.tree.selectedItems
+        if callable(items):
+            items = items()
+        return list(items or [])
+
+    def _selected_records(self):
+        records = []
+        seen = set()
+        for item in self._selected_items():
+            record = self._record_from_item(item)
+            if record is None or record.path in seen:
+                continue
+            records.append(record)
+            seen.add(record.path)
+        if not records:
+            record = self._record_from_item(self._current_item())
+            if record is not None:
+                records.append(record)
+        return records
+
+    def _object_paths_for_records(self, view, cv, records):
+        paths = []
+        for record in records:
+            obj_path = _object_path_for_record(cv.layout(), cv.cell, view.active_cellview_index, record)
+            if obj_path is None:
+                print("[instance-browser] could not rebuild object path: {}".format(record.path))
+                continue
+            paths.append(obj_path)
+        return paths
 
     def select_current(self, *args):
-        record = self._selected_record()
-        if record is None:
+        records = self._selected_records()
+        if not records:
             return
         view = _current_view()
         cv = _current_cellview(view)
         if view is None or cv is None:
             return
-        obj_path = _object_path_for_record(cv.layout(), cv.cell, view.active_cellview_index, record)
-        if obj_path is None:
-            print("[instance-browser] could not rebuild object path: {}".format(record.path))
+        obj_paths = self._object_paths_for_records(view, cv, records)
+        if not obj_paths:
             return
-        view.object_selection = [obj_path]
+        view.object_selection = obj_paths
         try:
             view.update_content()
         except Exception:
             pass
-        print("[instance-browser] selected path: {}".format(record.path))
+        print("[instance-browser] selected {} instance(s)".format(len(obj_paths)))
 
     def zoom_current(self, *args):
-        record = self._selected_record()
-        if record is None:
+        records = self._selected_records()
+        if not records:
             return
         view = _current_view()
         cv = _current_cellview(view)
         if view is None or cv is None:
             return
-        _zoom_to_record(view, cv, record)
+        _zoom_to_records(view, cv, records)
 
     def select_and_zoom_current(self, *args):
         self.select_current()
@@ -241,7 +277,8 @@ class InstanceBrowserWidget(pya.QWidget):
         if record is None:
             return
         try:
-            self.tree.setCurrentItem(item)
+            if item not in self._selected_items():
+                self.tree.setCurrentItem(item)
         except Exception:
             pass
         self.select_and_zoom_current()
