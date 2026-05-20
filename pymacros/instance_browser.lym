@@ -58,6 +58,56 @@ def _current_cellview(view):
     return view.cellview(view.active_cellview_index)
 
 
+def _nth_instance(cell, wanted_index):
+    for index, inst in enumerate(cell.each_inst()):
+        if index == wanted_index:
+            return inst
+    return None
+
+
+def _inst_cell_index(inst):
+    try:
+        return int(inst.cell_index)
+    except Exception:
+        pass
+    try:
+        return int(inst.cell.cell_index())
+    except Exception:
+        return None
+
+
+def _object_path_for_record(layout, top_cell, cv_index, record):
+    obj_path = pya.ObjectInstPath()
+    obj_path.cv_index = cv_index
+    cell = top_cell
+    for index in record.index_path:
+        inst = _nth_instance(cell, index)
+        if inst is None:
+            return None
+        obj_path.append_path(pya.InstElement(inst))
+        child_index = _inst_cell_index(inst)
+        if child_index is None:
+            return None
+        cell = layout.cell(child_index)
+        if cell is None:
+            return None
+    return obj_path
+
+
+def _zoom_to_record(view, cv, record):
+    box = record.bbox
+    left = float(box[0]) * cv.layout().dbu
+    bottom = float(box[1]) * cv.layout().dbu
+    right = float(box[2]) * cv.layout().dbu
+    top = float(box[3]) * cv.layout().dbu
+    width = max(0.0, right - left)
+    height = max(0.0, top - bottom)
+    pad = max(width, height) * 0.15
+    if pad <= 0.0:
+        pad = 1.0
+    view.zoom_box(pya.DBox(left - pad, bottom - pad, right + pad, top + pad))
+
+
 class InstanceBrowserDock(pya.QDockWidget):
     def __init__(self):
         pya.QDockWidget.__init__(self)
@@ -75,19 +125,31 @@ class InstanceBrowserWidget(pya.QWidget):
         self.filter_edit = pya.QLineEdit()
         self.filter_edit.setPlaceholderText("Filter by cell, parent, or path")
         self.refresh_button = pya.QPushButton("Refresh")
+        self.select_button = pya.QPushButton("Select")
+        self.zoom_button = pya.QPushButton("Zoom")
+        self.select_zoom_button = pya.QPushButton("Select + Zoom")
         self.tree = pya.QTreeWidget()
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(["Instance", "Parent", "Path", "Trans", "BBox"])
+        self._records_by_path = {}
 
         layout = pya.QVBoxLayout()
         controls = pya.QHBoxLayout()
         controls.addWidget(self.filter_edit)
         controls.addWidget(self.refresh_button)
         layout.addLayout(controls)
+        actions = pya.QHBoxLayout()
+        actions.addWidget(self.select_button)
+        actions.addWidget(self.zoom_button)
+        actions.addWidget(self.select_zoom_button)
+        layout.addLayout(actions)
         layout.addWidget(self.tree)
         self.setLayout(layout)
 
         self.refresh_button.clicked(self.refresh)
+        self.select_button.clicked(self.select_current)
+        self.zoom_button.clicked(self.zoom_current)
+        self.select_zoom_button.clicked(self.select_and_zoom_current)
         self.filter_edit.textChanged(self.refresh)
         self.tree.itemDoubleClicked(self._on_item_double_clicked)
 
@@ -95,6 +157,7 @@ class InstanceBrowserWidget(pya.QWidget):
         view = _current_view()
         cv = _current_cellview(view)
         self.tree.clear()
+        self._records_by_path = {}
         if cv is None or cv.layout() is None or cv.cell is None:
             return
 
@@ -119,14 +182,69 @@ class InstanceBrowserWidget(pya.QWidget):
                     [record.label, record.parent_cell, record.path, record.trans, bbox_text]
                 )
                 item.setData(0, QT_USER_ROLE, record.path)
+                self._records_by_path[record.path] = record
                 group_item.addChild(item)
             group_item.setExpanded(True)
 
-    def _on_item_double_clicked(self, item, column):
+    def _current_item(self):
+        item = self.tree.currentItem
+        if callable(item):
+            item = item()
+        return item
+
+    def _record_from_item(self, item):
+        if item is None:
+            return None
         path = item.data(0, QT_USER_ROLE)
         if path is None:
+            return None
+        return self._records_by_path.get(str(path))
+
+    def _selected_record(self):
+        return self._record_from_item(self._current_item())
+
+    def select_current(self, *args):
+        record = self._selected_record()
+        if record is None:
             return
-        print("[instance-browser] selected path: {}".format(path))
+        view = _current_view()
+        cv = _current_cellview(view)
+        if view is None or cv is None:
+            return
+        obj_path = _object_path_for_record(cv.layout(), cv.cell, view.active_cellview_index, record)
+        if obj_path is None:
+            print("[instance-browser] could not rebuild object path: {}".format(record.path))
+            return
+        view.object_selection = [obj_path]
+        try:
+            view.update_content()
+        except Exception:
+            pass
+        print("[instance-browser] selected path: {}".format(record.path))
+
+    def zoom_current(self, *args):
+        record = self._selected_record()
+        if record is None:
+            return
+        view = _current_view()
+        cv = _current_cellview(view)
+        if view is None or cv is None:
+            return
+        _zoom_to_record(view, cv, record)
+
+    def select_and_zoom_current(self, *args):
+        self.select_current()
+        self.zoom_current()
+
+    def _on_item_double_clicked(self, item, column):
+        record = self._record_from_item(item)
+        if record is None:
+            return
+        try:
+            self.tree.setCurrentItem(item)
+        except Exception:
+            pass
+        self.select_and_zoom_current()
 
 
 def _run():

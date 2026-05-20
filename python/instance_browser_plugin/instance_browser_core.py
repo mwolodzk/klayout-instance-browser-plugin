@@ -19,6 +19,7 @@ class InstanceRecord:
     cell_index: int
     parent_cell_index: int
     inst_pointer: Optional[int] = None
+    index_path: Tuple[int, ...] = ()
 
     @property
     def label(self) -> str:
@@ -104,6 +105,7 @@ def collect_instances(
         depth: int,
         stack: Tuple[int, ...],
         parent_abs_trans: pya.Trans,
+        parent_index_path: Tuple[int, ...],
     ):
         if max_depth is not None and depth > max_depth:
             return
@@ -127,6 +129,7 @@ def collect_instances(
             child_name = _safe_cell_name(layout, child_index)
             label = "{}[{}]".format(child_name, index_in_parent)
             path = label if not parent_path else parent_path + "/" + label
+            index_path = parent_index_path + (index_in_parent,)
             records.append(
                 InstanceRecord(
                     ref_cell=child_name,
@@ -140,6 +143,7 @@ def collect_instances(
                     cell_index=child_index,
                     parent_cell_index=parent_cell_index,
                     inst_pointer=_inst_pointer(inst),
+                    index_path=index_path,
                 )
             )
 
@@ -151,9 +155,16 @@ def collect_instances(
                     child_abs_trans = parent_abs_trans * inst.trans
                 except Exception:
                     child_abs_trans = parent_abs_trans
-                visit(child_cell, path, depth + 1, stack + (child_index,), child_abs_trans)
+                visit(
+                    child_cell,
+                    path,
+                    depth + 1,
+                    stack + (child_index,),
+                    child_abs_trans,
+                    index_path,
+                )
 
-    visit(top_cell, "", 0, (int(top_cell.cell_index()),), pya.Trans())
+    visit(top_cell, "", 0, (int(top_cell.cell_index()),), pya.Trans(), ())
     return records
 
 
@@ -176,6 +187,7 @@ def records_as_tsv(records: Iterable[InstanceRecord]) -> str:
         "bbox_bottom",
         "bbox_right",
         "bbox_top",
+        "index_path",
     ]
     lines = ["\t".join(header)]
     for record in records:
@@ -193,6 +205,7 @@ def records_as_tsv(records: Iterable[InstanceRecord]) -> str:
                     str(box[1]),
                     str(box[2]),
                     str(box[3]),
+                    "/".join(str(i) for i in record.index_path),
                 ]
             )
         )
