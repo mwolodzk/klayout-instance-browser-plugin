@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Instance Browser</description>
+ <version>1.0</version>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut>Ctrl+Alt+I</shortcut>
+ <show-in-menu>true</show-in-menu>
+ <group-name/>
+ <menu-path>tools_menu.end</menu-path>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text><![CDATA[
+import os
+import sys
+
+import pya
+
+def _candidate_python_dirs():
+    candidates = []
+    try:
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "python"))
+    except Exception:
+        pass
+    for root in [os.environ.get("KLAYOUT_HOME"), os.environ.get("IIC_KLAYOUT_HOME_OVERRIDE")]:
+        if root:
+            candidates.append(os.path.join(root, "salt", "InstanceBrowserPlugin", "python"))
+    return candidates
+
+
+for python_dir in _candidate_python_dirs():
+    if os.path.isdir(python_dir) and python_dir not in sys.path:
+        sys.path.insert(0, python_dir)
+        break
+
+from instance_browser_plugin.instance_browser_core import collect_instances, grouped_by_reference
+
+
+_DOCK = None
+
+
+def _current_view():
+    mw = pya.Application.instance().main_window()
+    if mw is None:
+        return None
+    return mw.current_view()
+
+
+def _current_cellview(view):
+    if view is None or view.active_cellview_index < 0:
+        return None
+    return view.cellview(view.active_cellview_index)
+
+
+class InstanceBrowserDock(pya.QDockWidget):
+    def __init__(self):
+        pya.QDockWidget.__init__(self)
+        self.setWindowTitle("Instance Browser")
+        self.widget = InstanceBrowserWidget()
+        self.setWidget(self.widget)
+
+    def refresh(self):
+        self.widget.refresh()
+
+
+class InstanceBrowserWidget(pya.QWidget):
+    def __init__(self):
+        pya.QWidget.__init__(self)
+        self.filter_edit = pya.QLineEdit()
+        self.filter_edit.setPlaceholderText("Filter by cell, parent, or path")
+        self.refresh_button = pya.QPushButton("Refresh")
+        self.tree = pya.QTreeWidget()
+        self.tree.setColumnCount(5)
+        self.tree.setHeaderLabels(["Instance", "Parent", "Path", "Trans", "BBox"])
+
+        layout = pya.QVBoxLayout()
+        controls = pya.QHBoxLayout()
+        controls.addWidget(self.filter_edit)
+        controls.addWidget(self.refresh_button)
+        layout.addLayout(controls)
+        layout.addWidget(self.tree)
+        self.setLayout(layout)
+
+        self.refresh_button.clicked(self.refresh)
+        self.filter_edit.textChanged(self.refresh)
+        self.tree.itemDoubleClicked(self._on_item_double_clicked)
+
+    def refresh(self):
+        view = _current_view()
+        cv = _current_cellview(view)
+        self.tree.clear()
+        if cv is None or cv.layout() is None or cv.cell is None:
+            return
+
+        text = str(self.filter_edit.text).lower().strip()
+        records = collect_instances(cv.layout(), cv.cell)
+        grouped = grouped_by_reference(records)
+        for ref_cell, items in grouped.items():
+            visible_items = []
+            for record in items:
+                haystack = " ".join([record.ref_cell, record.parent_cell, record.path]).lower()
+                if not text or text in haystack:
+                    visible_items.append(record)
+            if not visible_items:
+                continue
+
+            group_item = pya.QTreeWidgetItem([ref_cell, "", "{} instance(s)".format(len(visible_items)), "", ""])
+            self.tree.addTopLevelItem(group_item)
+            for record in visible_items:
+                box = record.bbox
+                bbox_text = "{},{},{},{}".format(box[0], box[1], box[2], box[3])
+                item = pya.QTreeWidgetItem(
+                    [record.label, record.parent_cell, record.path, record.trans, bbox_text]
+                )
+                item.setData(0, pya.Qt.UserRole, record.path)
+                group_item.addChild(item)
+            group_item.setExpanded(True)
+
+    def _on_item_double_clicked(self, item, column):
+        path = item.data(0, pya.Qt.UserRole)
+        if path is None:
+            return
+        print("[instance-browser] selected path: {}".format(path))
+
+
+def _run():
+    global _DOCK
+    mw = pya.Application.instance().main_window()
+    if mw is None:
+        return
+    if _DOCK is None:
+        _DOCK = InstanceBrowserDock()
+        mw.addDockWidget(pya.Qt.RightDockWidgetArea, _DOCK)
+    _DOCK.show()
+    _DOCK.raise_()
+    _DOCK.refresh()
+
+
+_run()
+]]></text>
+</klayout-macro>
