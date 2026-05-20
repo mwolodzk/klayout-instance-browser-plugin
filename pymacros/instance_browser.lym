@@ -20,6 +20,8 @@ import sys
 
 import pya
 
+QT_USER_ROLE = 256
+
 def _candidate_python_dirs():
     candidates = []
     try:
@@ -116,12 +118,12 @@ class InstanceBrowserWidget(pya.QWidget):
                 item = pya.QTreeWidgetItem(
                     [record.label, record.parent_cell, record.path, record.trans, bbox_text]
                 )
-                item.setData(0, pya.Qt.UserRole, record.path)
+                item.setData(0, QT_USER_ROLE, record.path)
                 group_item.addChild(item)
             group_item.setExpanded(True)
 
     def _on_item_double_clicked(self, item, column):
-        path = item.data(0, pya.Qt.UserRole)
+        path = item.data(0, QT_USER_ROLE)
         if path is None:
             return
         print("[instance-browser] selected path: {}".format(path))
