@@ -3,12 +3,12 @@
  <name>mwolodzk.InstanceBrowserPlugin</name>
  <token/>
  <hidden>false</hidden>
- <version>0.1.2</version>
+ <version>0.1.3</version>
  <api-version/>
  <title>Instance Browser Plugin</title>
  <doc>Browse and select layout instances grouped by referenced cell in KLayout.</doc>
  <doc-url>https://github.com/mwolodzk/klayout-instance-browser-plugin</doc-url>
- <url>git+https://github.com/mwolodzk/klayout-instance-browser-plugin.git[v0.1.2]</url>
+ <url>git+https://github.com/mwolodzk/klayout-instance-browser-plugin.git[v0.1.3]</url>
  <license>MIT</license>
  <author>Michał Wołodźko</author>
  <author-contact>mwolodzk@gmail.com</author-contact>

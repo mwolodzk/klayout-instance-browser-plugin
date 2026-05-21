@@ -149,16 +149,12 @@ class InstanceBrowserController:
         self.update_action()
 
     def sync_from_dock(self):
+        # Keep only the persistent checkbox state in sync. Do not refresh the
+        # tree here: refresh() rebuilds QTreeWidget items and clears interactive
+        # multi-selection while the user is clicking rows.
         visible = instance_browser_visible()
         self.set_preferred_visible(visible)
         self.update_action()
-        if visible:
-            dock = get_instance_browser_dock()
-            if dock is not None:
-                try:
-                    dock.refresh()
-                except Exception:
-                    pass
 
 
 if pya.Application.instance().is_editable():

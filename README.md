@@ -24,7 +24,7 @@ Default shortcut:
 Ctrl+Alt+I
 ```
 
-The `View -> Instances` checkbox stores its state in KLayout preferences. If it is checked when KLayout closes, the instance browser is shown again on the next editable KLayout startup.
+The `View -> Instances` checkbox stores its state in KLayout preferences. If it is checked when KLayout closes, the instance browser is shown again on the next editable KLayout startup. The persistent checkbox does not auto-refresh the tree while visible, so row selections remain stable during multi-select operations.
 
 The dock provides:
 
