@@ -15,6 +15,7 @@ The GUI macro opens an `Instance Browser` dock from:
 
 ```text
 Tools -> Instance Browser
+View -> Instances
 ```
 
 Default shortcut:
@@ -35,7 +36,7 @@ The dock provides:
 ## Usage
 
 1. Open a hierarchical layout.
-2. Run `Tools -> Instance Browser` or press `Ctrl+Alt+I`.
+2. Run `Tools -> Instance Browser`, `View -> Instances`, or press `Ctrl+Alt+I`.
 3. Use the filter field to narrow the instance list.
 4. Expand a referenced-cell group.
 5. Select one or more instance rows.
