@@ -1,20 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<klayout-macro>
- <description>Instances</description>
- <version>1.0</version>
- <category>pymacros</category>
- <prolog/>
- <epilog/>
- <doc/>
- <autorun>false</autorun>
- <autorun-early>false</autorun-early>
- <shortcut/>
- <show-in-menu>true</show-in-menu>
- <group-name/>
- <menu-path>view_menu.end</menu-path>
- <interpreter>python</interpreter>
- <dsl-interpreter-name/>
- <text><![CDATA[
+
 import os
 import sys
 
@@ -284,19 +268,42 @@ class InstanceBrowserWidget(pya.QWidget):
         self.select_and_zoom_current()
 
 
-def _run():
+def get_instance_browser_dock():
     global _DOCK
     mw = pya.Application.instance().main_window()
     if mw is None:
-        return
+        return None
     if _DOCK is None:
         _DOCK = InstanceBrowserDock()
         mw.addDockWidget(pya.Qt.RightDockWidgetArea, _DOCK)
-    _DOCK.show()
-    _DOCK.raise_()
-    _DOCK.refresh()
+    return _DOCK
 
 
-_run()
-]]></text>
-</klayout-macro>
+def show_instance_browser(raise_window=True):
+    dock = get_instance_browser_dock()
+    if dock is None:
+        return None
+    dock.show()
+    if raise_window:
+        dock.raise_()
+    dock.refresh()
+    return dock
+
+
+def hide_instance_browser():
+    dock = get_instance_browser_dock()
+    if dock is not None:
+        dock.hide()
+    return dock
+
+
+def instance_browser_visible():
+    if _DOCK is None:
+        return False
+    for attr in ("isVisible", "visible"):
+        try:
+            value = getattr(_DOCK, attr)
+            return bool(value() if callable(value) else value)
+        except Exception:
+            pass
+    return False

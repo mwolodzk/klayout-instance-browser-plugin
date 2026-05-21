@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Instance Browser Autorun</description>
+ <version>1.0</version>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>true</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text><![CDATA[
+import os
+import sys
+
+import pya
+
+CONFIG_KEY = "InstanceBrowserPlugin__visible"
+MENU_PATH = "view_menu.instance_browser_instances"
+MENU_NAME = "instance_browser_instances"
+
+
+def _candidate_python_dirs():
+    candidates = []
+    try:
+        candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "python"))
+    except Exception:
+        pass
+    for root in [os.environ.get("KLAYOUT_HOME"), os.environ.get("IIC_KLAYOUT_HOME_OVERRIDE")]:
+        if root:
+            candidates.append(os.path.join(root, "salt", "InstanceBrowserPlugin", "python"))
+    return candidates
+
+
+for python_dir in _candidate_python_dirs():
+    if os.path.isdir(python_dir) and python_dir not in sys.path:
+        sys.path.insert(0, python_dir)
+        break
+
+from instance_browser_plugin.instance_browser_gui import (
+    get_instance_browser_dock,
+    hide_instance_browser,
+    instance_browser_visible,
+    show_instance_browser,
+)
+
+
+def _as_bool(value, default=False):
+    if value is None or str(value) == "":
+        return default
+    return str(value).strip().lower() not in ("0", "false", "no", "off")
+
+
+class InstanceBrowserController:
+    def __init__(self):
+        self.action = None
+        self.install_timer = None
+        self.install_attempts = 0
+        self.sync_timer = None
+        self.schedule_install_menu()
+
+    def preferred_visible(self):
+        try:
+            return _as_bool(pya.Application.instance().get_config(CONFIG_KEY), False)
+        except Exception:
+            return False
+
+    def set_preferred_visible(self, visible):
+        try:
+            pya.Application.instance().set_config(CONFIG_KEY, "1" if visible else "0")
+        except Exception:
+            pass
+
+    def schedule_install_menu(self):
+        if self.install_attempts >= 20:
+            print("[instance-browser] main window did not appear, menu not installed")
+            return
+        self.install_attempts += 1
+        if self.install_timer is None:
+            self.install_timer = pya.QTimer()
+            self.install_timer.setSingleShot(True)
+            self.install_timer.timeout(self.install_menu)
+        self.install_timer.start(250)
+
+    def install_menu(self):
+        mw = pya.Application.instance().main_window()
+        if mw is None:
+            self.schedule_install_menu()
+            return
+        menu = mw.menu()
+        try:
+            if menu.is_valid(MENU_PATH):
+                menu.delete_item(MENU_PATH)
+        except Exception:
+            pass
+
+        action = pya.Action()
+        action.title = "Instances"
+        try:
+            action.checkable = True
+        except Exception:
+            pass
+        action.on_triggered += self.toggle
+
+        insert_path = "view_menu.show_ghost_cells"
+        try:
+            if not menu.is_valid(insert_path):
+                insert_path = "view_menu.end"
+            menu.insert_item(insert_path, MENU_NAME, action)
+            self.action = action
+        except Exception as exc:
+            print("[instance-browser] insert View/Instances failed: {}".format(exc))
+            return
+
+        self.update_action()
+        self.start_sync_timer()
+        if self.preferred_visible():
+            show_instance_browser(raise_window=False)
+            self.update_action()
+        print("[instance-browser] View/Instances checkbox installed")
+
+    def start_sync_timer(self):
+        if self.sync_timer is None:
+            self.sync_timer = pya.QTimer()
+            self.sync_timer.timeout(self.sync_from_dock)
+        self.sync_timer.start(500)
+
+    def update_action(self):
+        if self.action is None:
+            return
+        try:
+            self.action.checked = instance_browser_visible()
+        except Exception:
+            pass
+        self.action.title = "Instances"
+
+    def toggle(self):
+        if instance_browser_visible():
+            hide_instance_browser()
+            self.set_preferred_visible(False)
+        else:
+            show_instance_browser()
+            self.set_preferred_visible(True)
+        self.update_action()
+
+    def sync_from_dock(self):
+        visible = instance_browser_visible()
+        self.set_preferred_visible(visible)
+        self.update_action()
+        if visible:
+            dock = get_instance_browser_dock()
+            if dock is not None:
+                try:
+                    dock.refresh()
+                except Exception:
+                    pass
+
+
+if pya.Application.instance().is_editable():
+    if not hasattr(pya.Application.instance(), "_instance_browser_controller"):
+        pya.Application.instance()._instance_browser_controller = InstanceBrowserController()
+]]></text>
+</klayout-macro>

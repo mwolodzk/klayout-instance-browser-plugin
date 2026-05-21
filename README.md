@@ -15,7 +15,7 @@ The GUI macro opens an `Instance Browser` dock from:
 
 ```text
 Tools -> Instance Browser
-View -> Instances
+View -> Instances (checkable)
 ```
 
 Default shortcut:
@@ -23,6 +23,8 @@ Default shortcut:
 ```text
 Ctrl+Alt+I
 ```
+
+The `View -> Instances` checkbox stores its state in KLayout preferences. If it is checked when KLayout closes, the instance browser is shown again on the next editable KLayout startup.
 
 The dock provides:
 
